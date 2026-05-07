@@ -120,7 +120,7 @@ class UVLF(Likelihood):
 
         # ---- Parse constants ----
         self.parse_assign(BASE / "UVLF_ST_model2.data", 'UVLF_HST_ST_model2')
-
+        
         # JWST reference cosmology (Donnan+ 2024)
         self.Omega_m_JWST = 0.3
         self.h_JWST = 0.7  # H0=70 => h=0.7
@@ -383,35 +383,23 @@ class UVLF(Likelihood):
 
     # ---------- M_UV mapping and integrated Gaussian ----------
     @staticmethod
-    def MUV_from_Mh_vec(z, Mh, Hubble, alphastar, betastar, epsilonstar_slope, epsilonstar_icept, Mc_slope, Mc_icept
-                        , kappaUV, invMpctoinvYear, 
-                        alphastar_slope, toggle ):
+    def MUV_from_Mh_vec(z, Mh, Hubble, alphastar_icept, betastar, epsilonstar_icept, Mc_icept
+                        , alphastar_slope, epsilonstar_slope, Mc_slope
+                        , kappaUV, invMpctoinvYear):
         
-        # epsilonstar = 10 ** (epsilonstar_slope * np.log10((1 + z) / (1 + 7)) + epsilonstar_icept)
-        epsilonstar = 10 ** (epsilonstar_icept + np.where(z <= 8.5, 0.0 , epsilonstar_slope * (z - 8.5)) )
+        epsilonstar = 10 ** (epsilonstar_slope * np.log10((1 + z) / (1 + 7)) + epsilonstar_icept)
 
         Mc = 10 ** ( Mc_slope *np.log10((1 + z) / (1 + 7)) + Mc_icept ) 
 
-        if toggle==0:
-            alphastar = alphastar_slope * np.log10((1 + z) / (1 + 7)) + alphastar
-        elif toggle==1:    
-            alphastar = alphastar + alphastar_slope * np.exp((z-7) / (7)) 
-        elif toggle==2:
-            alphastar = alphastar + np.where(z <= 8.1, 0.0 , alphastar_slope * (z - 8.1))
+        alphastar = alphastar_slope * np.log10((1 + z) / (1 + 7)) + alphastar_icept
 
-        # add this later, to ensure exp and quadratic or other forms don't go beyond 0
-        # alphastar = np.minimum(alphastar, -0.01)   
-        
-        MhMc = (Mh / Mc) # nick add
+        MhMc = (Mh / Mc) 
 
         Mhdot = (
                 (1.0)
                 * Hubble
                 * invMpctoinvYear
-                # * 1.0
-                # * np.sqrt(2.0 / np.pi)
                 * Mh
-                # * functionf
                 )
 
         den = ((MhMc) ** alphastar + (MhMc) ** betastar) * kappaUV
@@ -424,7 +412,7 @@ class UVLF(Likelihood):
         return 0.5 * (erf((MUV_av - MUV + width / 2.0) / (sigma_MUV * np.sqrt(2.0))) -
                       erf((MUV_av - MUV - width / 2.0) / (sigma_MUV * np.sqrt(2.0))))
 
-    # ---------- Provider requirements ----------
+    # ----------------- Provider requirements ---------------
     def get_requirements(self):
         zs_req = self.zs_all if self.zs_all.size else np.array([6.0])
         return {
@@ -432,7 +420,7 @@ class UVLF(Likelihood):
                 "z": zs_req,
                 "k_max": self.k_max,
                 "nonlinear": False,
-                "vars_pairs": [("delta_tot", "delta_tot")]
+                "vars_pairs": [("delta_tot", "delta_tot")]    # get total matter power spectrum
             },
             "omega_b": None,
             "h": None,
@@ -443,20 +431,14 @@ class UVLF(Likelihood):
     # ---------- Log-likelihood with asymmetric errors ----------
     def logp(self, _derived=None, **params):
         
-        # sigma_MUV = params['sigma_MUV']
         # --- separate scatters ---
         sigma_MUV_hst  = params['sigma_MUV_hst']   # z < 9
         sigma_MUV_jwst = params['sigma_MUV_jwst']  # z >= 9
         _ = self.provider.get_param('omega_b')  # keep as dependency if used upstream
 
-        if params['toggle']==0:
-            alphastar = params['alphastar_slope'] * np.log10((1 + self.zs_all) / (1 + 7)) + params['alphastar']
-        elif params['toggle']==1:    
-            alphastar = params['alphastar'] + params['alphastar_slope'] * np.exp((self.zs_all-7) / (7)) 
-        else:
-            alphastar = params['alphastar'] + np.where(self.zs_all <= 8.1, 0.0 , params['alphastar_slope'] * (self.zs_all - 8.1))
+        alphastar = params['alphastar_slope'] * np.log10((1 + self.zs_all) / (1 + 7)) + params['alphastar_icept']
             
-        if np.any(alphastar > -0.01):
+        if np.any(alphastar > -0.01):   # check to ensure alphastar is always < 0 across all z-bins
             if _derived is not None:
                 _derived["chi2_hst"] = float(-np.inf)
                 _derived["chi2_jwst"] = float(-np.inf)
@@ -472,26 +454,23 @@ class UVLF(Likelihood):
         chisq = 0.0
         chi2_hst = 0.0   # NEW
         chi2_jwst = 0.0  # NEW
-        
-        # Mcut = 10**11 * (params['m_ncdm']/3000)**-3.33
-        
+                
         for z in self.zs_all:
             rows = data[data[:, 0] == z, 1:]
             if rows.size == 0:
                 continue
 
-            HMFs = self.HMF_all(z, Pk_interp, params['Anorm'])
+            HMFs = self.HMF_all(z, Pk_interp, params['Anorm'], params['qnorm'], params['cnorm'])
 
             Hz = self.provider.get_Hubble(z, units='1/Mpc')
             
             MUV_avs = self.MUV_from_Mh_vec(
                 z, self.Mhalos, Hz,
-                params['alphastar'], params['betastar'],
-                params['epsilonstar_slope'], params['epsilonstar_icept'],
-                params['Mc_slope'],params['Mc_icept'],
+                params['alphastar_icept'], params['betastar'],
+                params['epsilonstar_icept'], params['Mc_icept'],
+                params['alphastar_slope'], params['epsilonstar_slope'], params['Mc_slope'],
                 self.kappaUV, self.invMpctoinvYear,
-                params['alphastar_slope'], params['toggle'] 
-            )
+                )
 
             MUVs   = rows[:, 0][:, None]
             widths = rows[:, 1][:, None]
@@ -503,13 +482,10 @@ class UVLF(Likelihood):
             sigma_MUV_this = sigma_MUV_hst if (z < 8.1) else sigma_MUV_jwst
     
             FI    = self.first_integrand(MUVs.T, widths.T, MUV_avs[:, None], sigma_MUV_this)
-            # FI = self.first_integrand(MUVs.T, widths.T, MUV_avs[:, None], sigma_MUV)
             preds = self.wM @ (HMFs[:, None] * FI / widths.T)
 
             use_up = preds > phi
             sigma = np.where(use_up, sig_up, sig_lo)
-            # chisq += np.sum(((preds - phi) / sigma) ** 2)
-
             # compute this-z contribution once
             chi2_z = float(np.sum(((preds - phi) / sigma) ** 2))
 
