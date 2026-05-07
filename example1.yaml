@@ -1,0 +1,26 @@
+likelihood:
+  uvlf:
+    class: UVLF_model2.UVLF
+    python_path: .
+
+    input_params:
+      - alphastar_icept
+      - betastar
+      - epsilonstar_slope
+      - epsilonstar_icept
+      - Mc_slope
+      - Mc_icept
+      - alphastar_slope
+      - Anorm
+      - qnorm
+      - cnorm
+      - sigma_MUV_hst
+      - sigma_MUV_jwst
+
+    output_params:
+      - chi2_hst
+      - chi2_jwst
+
+    CV: 0.2
+    z_max: 12.5
+    window: ST
