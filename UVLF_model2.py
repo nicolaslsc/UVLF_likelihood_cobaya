@@ -46,7 +46,11 @@ class UVLF(Likelihood):
         Columns: z, MUV, dM, phi, sigma_up, sigma_lo
     Paths used below can be adjusted via `base`.
     """
-
+    # ---- options configurable from YAML ----
+    CV: float = 0.2        # cosmic variance floor for the UVLF data
+    z_max: float = 12.5   # max z data to be used for JWST
+    window: str = 'ST'    # default window function (Set 'sharpk' to use sharp-k window function)
+    
     # ---------- Initialization ----------
     def initialize(self):
         # ---- Integration grids ----
@@ -79,7 +83,7 @@ class UVLF(Likelihood):
         
         # HST data format (columns: z, MUV, dM, phi, sigma_up, sigma_lo)
         self.UVLF_HST = np.loadtxt(BASE / "UVLF_HST.txt")
-        minError = 0.2  # 20% Cosmic Variance floor
+        minError = self.CV  # 20% Cosmic Variance floor
         self.UVLF_HST[:, 4] = np.maximum(minError * self.UVLF_HST[:, 3], self.UVLF_HST[:, 4])
         self.UVLF_HST[:, 5] = np.maximum(minError * self.UVLF_HST[:, 3], self.UVLF_HST[:, 5])
         self.zs_hst = np.unique(self.UVLF_HST[:, 0])
@@ -87,7 +91,8 @@ class UVLF(Likelihood):
         # JWST 
         try:
             self.UVLF_JWST = np.loadtxt(BASE / "UVLF_JWST.txt")
-            self.zs_jwst = np.unique(self.UVLF_JWST[:, 0])
+            self.UVLF_JWST = self.UVLF_JWST[self.UVLF_JWST[:, 0] <= self.z_max]
+            self.zs_jwst = np.unique(self.UVLF_JWST[:, 0])    
         except OSError:
             self.UVLF_JWST = np.empty((0, 6))
             self.zs_jwst = np.array([])
@@ -121,7 +126,7 @@ class UVLF(Likelihood):
         self.h_JWST = 0.7  # H0=70 => h=0.7
 
         # JWST redshift half-bin widths for AP
-        self._jwst_dz_half = {9.0: 0.5, 10.0: 0.5, 11.0: 0.5, 12.5: 1.0}   # 
+        self._jwst_dz_half = {9.0: 0.5, 10.0: 0.5, 11.0: 0.5, 12.5: 1.0, 14.5: 1.0}   # add here, to extend for higher 'z'
 
         # Union of redshifts
         self.zs_all = np.sort(np.unique(np.concatenate([self.zs_hst, self.zs_jwst])))
@@ -245,10 +250,8 @@ class UVLF(Likelihood):
         kR = np.outer(self.kSpace, R_base)           # (Nk, NM)
         W2 = self.wTophat(kR)**2                     # (Nk, NM)
         self._w2_key = key
-        # self._W2_cached = W2
-        # self._R_base_cached = R_base
-        self._W2_cached = W2#.astype(np.float32)
-        self._R_base_cached = R_base#.astype(np.float32)
+        self._W2_cached = W2 
+        self._R_base_cached = R_base 
 
     def _sigma_from_cached_W2(self, Pkz):
         # σ²(R) = ∫ dlnk Δ²(k,z) W²(kR)
@@ -270,10 +273,63 @@ class UVLF(Likelihood):
         sig2 = np.trapz(Delta2[:, None]*W2, x=lnk, axis=0)
         return np.sqrt(np.maximum(sig2, 0.0))
 
-    def HMF_all(self, z, Pk_interp, An_sharpk):
-        # cosmology pieces
-        # Mcut = 10**11 * (mncdm/3000)**-3.33
-        
+    def sigma_sharpk_all(self, R_all, Pkz, c_edge=1.0):
+        k    = self.kSpace
+        lnk  = self.lnk
+        Delta2 = (k**3) * Pkz / (2.0 * np.pi**2)     # (Nk,)
+
+        # cumulative integral in ln k using trapezoid
+        I = np.empty_like(Delta2)
+        I[0] = 0.0
+        I[1:] = cumtrapz(Delta2, lnk)             # ∫ dlnk' Δ²
+
+        # interpolate I(ln k) with a shape-preserving spline
+        I_of_lnk = PchipInterpolator(lnk, I, extrapolate=False)
+
+        lnkc = np.log(np.clip(c_edge/np.asarray(R_all), k[0], k[-1]))
+        sig2 = I_of_lnk(lnkc)                        # already ∫^{kc} dlnk Δ²
+        # For kc > k_max, I_of_lnk returns NaN (since extrapolate=False); clamp to total:
+        sig2 = np.where(np.isfinite(sig2), sig2, I[-1])
+        return np.sqrt(np.maximum(sig2, 0.0))
+    
+    def sharpk_sigma_and_D(self, R_all, Pkz, c_edge=1.0):
+        """
+        Sharp-k filter (k-space tophat):
+            σ^2(R) = ∫^{k_c} dlnk Δ²(k),   k_c = c_edge / R
+        Analytic derivative:
+            D(M) ≡ -∂lnσ/∂lnM = Δ²(k_c) / [6 σ^2(R)]
+        Returns:
+            sigma : (NM,)  — rms fluctuation
+            D     : (NM,)  — slope entering the mass function
+        """
+        k     = self.kSpace
+        lnk   = self.lnk
+        Delta2 = (k**3) * Pkz / (2.0*np.pi**2)              # (Nk,)
+    
+        # cumulative integral I(lnk) = ∫ dlnk' Δ²
+        I = np.empty_like(Delta2)
+        I[0] = 0.0
+        I[1:] = cumtrapz(Delta2, lnk)
+    
+        # interpolants for σ^2 and Δ²
+        F_I  = PchipInterpolator(lnk, I)                    # monotone, C^1
+        F_D2 = PchipInterpolator(lnk, Delta2)
+    
+        # cutoff wavenumbers and evaluate
+        kc    = np.clip(c_edge / np.asarray(R_all), k[0], k[-1])
+        lnkc  = np.log(kc)
+        sig2  = F_I(lnkc)
+        sig2  = np.maximum(sig2, 0.0)
+        sigma = np.sqrt(sig2)
+    
+        # analytic D(M) = Δ²(kc) / (6 σ^2)
+        tiny  = 1e-300
+        D     = F_D2(lnkc) / (6.0 * np.maximum(sig2, tiny))
+    
+        return sigma, D
+    
+    def HMF_all(self, z, Pk_interp, An_sharpk, qn_sharpk, cn_sharpk):
+        # cosmology pieces        
         h        = self.provider.get_param("h")
         Omega_m  = self.provider.get_param("Omega_m")
         rhoM     = (h ** 2) * Omega_m * self.rho_crit
@@ -290,15 +346,40 @@ class UVLF(Likelihood):
         def f_ST(nu, A, a, p):
             return A * np.sqrt(2.0 * a / np.pi) * nu * np.exp(-0.5 * a * nu**2) * (1.0 + (a * nu**2) ** (-p))
 
-        # Tophat branch: (An, qn) = (1,1)
-        sigma_th = self._sigma_from_cached_W2(Pkz)
-        D_th = -np.gradient(np.log(sigma_th), lnM)
-        nu_th    = self.deltaST / sigma_th
-        f_th     = f_ST(nu_th, self.AST * float(An_sharpk), self.aST , self.pST)
-        hmf_th   = (rhoM / (self.Mhalos**2)) * f_th * D_th
+        window = self.window
+        # ---------------------------
+        # Standard top-hat ST   # Tophat branch: (An, qn) = (1,1)
+        # ---------------------------
+        if window == "ST": 
+        
+            sigma = self._sigma_from_cached_W2(Pkz)
+    
+            D = -np.gradient(np.log(sigma), lnM)
+    
+        # ---------------------------
+        # Sharp-k
+        # ---------------------------
+        elif window == "sharpk":
+    
+            sigma, D = self.sharpk_sigma_and_D(
+                self._R_base_cached,
+                Pkz,
+                c_edge=cn_sharpk
+            )
+    
+        nu = self.deltaST / sigma
+
+        f = f_ST(
+            nu,
+            self.AST * float(An_sharpk),
+            self.aST * float(qn_sharpk),
+            self.pST
+        )
+    
+        hmf = (rhoM / (self.Mhalos**2)) * f * D
 
 
-        return hmf_th #.astype(np.float32) 
+        return hmf
 
     # ---------- M_UV mapping and integrated Gaussian ----------
     @staticmethod
