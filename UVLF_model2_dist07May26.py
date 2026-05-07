@@ -4,15 +4,16 @@
 # Remodelled for COBAYA mcmc sampler
 # Written for Cobaya sampler on Oct 5, 2025
 # Authors: Sai Chaitanya Tadepalli and Siu Cheung Lam
-# Distribution by Sai Chaitaya Tadepalli, 
+# Affiliation: Indiana University, Bloomington, USA
+# Distribution by Sai Chaitaya Tadepalli
 # Please cite 2110.XXXX and 2110.XXXX when using this likelihood
 ########################################################################
 
 ########################################################################
-# Speed-ups by vectorization/caching
 # Features: 
 # Combined HST + JWST support
 # Sheth-Tormen and Sharp-k window functions
+# Speed-ups by vectorization/caching
 # Asymmetric-error likelihood (sigma_up, sigma_lo).
 # Added z-dependence for alphastar. Can be extended to other UVLF params
 ##########################################################################
@@ -23,6 +24,7 @@ import numpy as np
 from scipy.interpolate import PchipInterpolator, interp1d
 from scipy.special import erf
 import warnings
+from pathlib import Path
 
 try:
     from scipy.integrate import cumulative_trapezoid as cumtrapz
@@ -71,11 +73,12 @@ class UVLF(Likelihood):
         self.Mhalos = np.geomspace(1e8, 1e14, 1000)   
         self.wM = self._trapz_weights(self.Mhalos)   # trapezoid weights over M
 
+        # set path
+        BASE = Path(__file__).resolve().parent
         # ---- Load UVLF data ----
-        base = '/N/slate/saictade/MCMC_runs/projects/CDIfromUVLF'
-
+        
         # HST data format (columns: z, MUV, dM, phi, sigma_up, sigma_lo)
-        self.UVLF_HST = np.loadtxt(base + '/Likelihood-and-Data/UVLF_HST.txt')
+        self.UVLF_HST = np.loadtxt(BASE / "UVLF_HST.txt")
         minError = 0.2  # 20% Cosmic Variance floor
         self.UVLF_HST[:, 4] = np.maximum(minError * self.UVLF_HST[:, 3], self.UVLF_HST[:, 4])
         self.UVLF_HST[:, 5] = np.maximum(minError * self.UVLF_HST[:, 3], self.UVLF_HST[:, 5])
@@ -83,14 +86,14 @@ class UVLF(Likelihood):
 
         # JWST 
         try:
-            self.UVLF_JWST = np.loadtxt(base + '/Likelihood-and-Data/UVLF_JWST.txt')
+            self.UVLF_JWST = np.loadtxt(BASE / "UVLF_JWST.txt")
             self.zs_jwst = np.unique(self.UVLF_JWST[:, 0])
         except OSError:
             self.UVLF_JWST = np.empty((0, 6))
             self.zs_jwst = np.array([])
 
         # ---- Dust beta(z) functions ----
-        betadata = np.loadtxt(base + "/Likelihood-and-Data/Beta_parameters.txt", unpack=True)
+        betadata = np.loadtxt(BASE / "Beta_parameters.txt", unpack=True)
         self.betainterp = PchipInterpolator(betadata[0], betadata[1])
         self.dbetadMUVinterp = PchipInterpolator(betadata[0], betadata[2])
 
@@ -111,7 +114,7 @@ class UVLF(Likelihood):
             self.UVLF_HST[:, 5] *= np.array(LF_corr)
 
         # ---- Parse constants ----
-        self.parse_assign(base + '/Likelihood-and-Data/UVLF_ST_model2.data', 'UVLF_ST_model2')
+        self.parse_assign(BASE / "UVLF_ST_model2.data", 'UVLF_HST_ST_model2')
 
         # JWST reference cosmology (Donnan+ 2024)
         self.Omega_m_JWST = 0.3
