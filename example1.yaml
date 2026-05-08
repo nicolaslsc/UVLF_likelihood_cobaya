@@ -18,9 +18,9 @@ likelihood:
       - chi2_hst
       - chi2_jwst
 
-    CV: 0.2
-    z_max: 12.5
-    window: ST
-    Anorm: 1.0
-    qnorm: 1.0
+    CV: 0.2        # cosmic variance floor added to data covmat
+    z_max: 12.5   # max-z taken from JWST data file
+    window: 'tophat'    # 'tophat' vs 'sharpk' window function used within Sheth-Tormen HMF evalutaion
+    Anorm: 1.0    # multiply the paramters (A,q,c) of ST formula with Anorm, qnorm and cnorm to modify them. 
+    qnorm: 1.0    # Default (A,q,c) values of ST are read from "UVLF_HST_ST_model2.data' file
     cnorm: 1.0
