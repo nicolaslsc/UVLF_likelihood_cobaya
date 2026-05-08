@@ -50,7 +50,9 @@ class UVLF(Likelihood):
     CV: float = 0.2        # cosmic variance floor for the UVLF data
     z_max: float = 12.5   # max z data to be used for JWST
     window: str = 'ST'    # default window function (Set 'sharpk' to use sharp-k window function)
-    
+    Anorm: float = 1.0   # no change for ST window
+    qnorm: float = 1.0   # no change for ST window
+    cnorm: float = 1.0   # no change for ST window
     # ---------- Initialization ----------
     def initialize(self):
         # ---- Integration grids ----
@@ -460,7 +462,11 @@ class UVLF(Likelihood):
             if rows.size == 0:
                 continue
 
-            HMFs = self.HMF_all(z, Pk_interp, params['Anorm'], params['qnorm'], params['cnorm'])
+            HMFs = self.HMF_all(z, Pk_interp, 
+                                params.get('Anorm', self.Anorm), 
+                                params.get('qnorm', self.qnorm), 
+                                params.get('cnorm', self.cnorm)
+                               )
 
             Hz = self.provider.get_Hubble(z, units='1/Mpc')
             
