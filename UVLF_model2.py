@@ -463,9 +463,9 @@ class UVLF(Likelihood):
                 continue
 
             HMFs = self.HMF_all(z, Pk_interp, 
-                                params.get('Anorm', self.Anorm), 
-                                params.get('qnorm', self.qnorm), 
-                                params.get('cnorm', self.cnorm)
+                                self.Anorm, 
+                                self.qnorm, 
+                                self.cnorm
                                )
 
             Hz = self.provider.get_Hubble(z, units='1/Mpc')
