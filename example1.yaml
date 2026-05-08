@@ -11,9 +11,6 @@ likelihood:
       - Mc_slope
       - Mc_icept
       - alphastar_slope
-      - Anorm
-      - qnorm
-      - cnorm
       - sigma_MUV_hst
       - sigma_MUV_jwst
 
@@ -24,3 +21,6 @@ likelihood:
     CV: 0.2
     z_max: 12.5
     window: ST
+    Anorm: 1.0
+    qnorm: 1.0
+    cnorm: 1.0
