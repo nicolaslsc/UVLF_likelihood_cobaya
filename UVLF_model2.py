@@ -6,7 +6,7 @@
 # Authors: Sai Chaitanya Tadepalli and Siu Cheung Lam
 # Affiliation: Indiana University, Bloomington, USA
 # Distribution by Sai Chaitaya Tadepalli
-# Please cite 2110.XXXX and 2110.XXXX when using this likelihood
+# Please cite 2512.16987 when using this likelihood
 ########################################################################
 
 ########################################################################
