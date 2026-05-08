@@ -12,7 +12,7 @@
 ########################################################################
 # Features: 
 # Combined HST + JWST support
-# Sheth-Tormen and Sharp-k window functions
+# Tophat and Sharp-k window functions
 # Speed-ups by vectorization/caching
 # Asymmetric-error likelihood (sigma_up, sigma_lo).
 # Added z-dependence for alphastar. Can be extended to other UVLF params
