@@ -1,13 +1,12 @@
 # UVLF Likelihood for Cobaya
 
-Custom UV luminosity function (UVLF) likelihood module for the [Cobaya](https://github.com/CobayaSampler/cobaya) MCMC framework, based on the original implementation from the public GALLUMI likelihood.
+Custom UV luminosity function (UVLF) likelihood module for the [Cobaya](https://github.com/CobayaSampler/cobaya) MCMC framework, based on the original implementation from the public GALLUMI likelihood(https://github.com/NNSSA/GALLUMI_public).
 
 This likelihood supports:
 
 * Combined HST + JWST UVLF datasets
-* Sheth–Tormen and sharp-k halo mass functions
-* Asymmetric observational errors
-* Alcock–Paczynski corrections
+* Tophat and sharp-k window function for halo mass function evaluation
+* Asymmetric UVLF observational errors
 * Redshift-dependent UVLF parameters
 * Vectorized and cached computations for faster MCMC evaluation
 
@@ -97,8 +96,8 @@ likelihood:
 
 The repository includes:
 
-* HST UVLF data
-* JWST UVLF data
+* HST UVLF data (from z=4 to z=8)
+* JWST UVLF data (from z=9 up to z=14.5)
 * Dust-correction parameter tables
 
 All file paths are internally portable using relative path handling.
@@ -109,8 +108,8 @@ All file paths are internally portable using relative path handling.
 
 If using this likelihood, please cite:
 
-* Original GALLUMI likelihood paper
-* Associated UVLF analysis paper(s)
+* Original GALLUMI likelihood papers 2110.13161 and 2110.13168 
+* Our UVLF cobaya based analysis paper 2512.16987
 
 Additional citation information will be added here upon publication.
 
