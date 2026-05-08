@@ -49,12 +49,25 @@ class UVLF(Likelihood):
     # ---- options configurable from YAML ----
     CV: float = 0.2        # cosmic variance floor for the UVLF data
     z_max: float = 12.5   # max z data to be used for JWST
-    window: str = 'ST'    # default window function (Set 'sharpk' to use sharp-k window function)
-    Anorm: float = 1.0   # no change for ST window
-    qnorm: float = 1.0   # no change for ST window
-    cnorm: float = 1.0   # no change for ST window
+    window: str = 'tophat'    # default window function (Set 'sharpk' to use sharp-k window function)
+    Anorm: float = None   # defaults to 1 for tophat window
+    qnorm: float = None   # defaults to 1 for tophat window
+    cnorm: float = None   # defaults to 1 for tophat window
     # ---------- Initialization ----------
     def initialize(self):
+        if str(self.window).lower() == "sharpk":
+            if self.Anorm is None or self.qnorm is None or self.cnorm is None:
+                raise ValueError(
+                    "For window='sharpk', Anorm, qnorm, and cnorm must be set explicitly in the YAML."
+                )
+
+        # If top-hat, use defaults if omitted
+        if self.Anorm is None:
+            self.Anorm = 1.0
+        if self.qnorm is None:
+            self.qnorm = 1.0
+        if self.cnorm is None:
+            self.cnorm = 1.0
         # ---- Integration grids ----
         self.points, self.weights = np.polynomial.legendre.leggauss(25)  # Gaussian quad for r(z)
 
@@ -330,7 +343,7 @@ class UVLF(Likelihood):
     
         return sigma, D
     
-    def HMF_all(self, z, Pk_interp, An_sharpk, qn_sharpk, cn_sharpk):
+    def HMF_all(self, z, Pk_interp):
         # cosmology pieces        
         h        = self.provider.get_param("h")
         Omega_m  = self.provider.get_param("Omega_m")
@@ -347,12 +360,16 @@ class UVLF(Likelihood):
         # Sheth–Tormen multiplicity factors (keep your assignments of A,q,c)
         def f_ST(nu, A, a, p):
             return A * np.sqrt(2.0 * a / np.pi) * nu * np.exp(-0.5 * a * nu**2) * (1.0 + (a * nu**2) ** (-p))
-
+        
+        An = self.Anorm
+        qn = self.qnorm
+        cn = self.cnorm
+        
         window = self.window
         # ---------------------------
         # Standard top-hat ST   # Tophat branch: (An, qn) = (1,1)
         # ---------------------------
-        if window == "ST": 
+        if window == "tophat": 
         
             sigma = self._sigma_from_cached_W2(Pkz)
     
@@ -366,15 +383,15 @@ class UVLF(Likelihood):
             sigma, D = self.sharpk_sigma_and_D(
                 self._R_base_cached,
                 Pkz,
-                c_edge=cn_sharpk
+                c_edge=cn
             )
     
         nu = self.deltaST / sigma
 
         f = f_ST(
             nu,
-            self.AST * float(An_sharpk),
-            self.aST * float(qn_sharpk),
+            self.AST * float(An),
+            self.aST * float(qn),
             self.pST
         )
     
