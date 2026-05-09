@@ -53,6 +53,23 @@ class UVLF(Likelihood):
     Anorm: float = None   # defaults to 1 for tophat window
     qnorm: float = None   # defaults to 1 for tophat window
     cnorm: float = None   # defaults to 1 for tophat window
+
+    # ---- input and output parameters that are configurable from YAML ----
+    params = {
+        "alphastar_icept": None,
+        "betastar": None,
+        "epsilonstar_slope": None,
+        "epsilonstar_icept": None,
+        "Mc_slope": None,
+        "Mc_icept": None,
+        "alphastar_slope": None,
+        "sigma_MUV_hst": None,
+        "sigma_MUV_jwst": None,
+        "chi2_hst": {"derived": True},
+        "chi2_jwst": {"derived": True},
+    }
+
+
     # ---------- Initialization ----------
     def initialize(self):
         if str(self.window).lower() == "sharpk":
