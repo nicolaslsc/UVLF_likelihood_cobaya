@@ -57,7 +57,8 @@ likelihood:
     window: tophat
 ```
 
-For complete list of input and output parameters, see `exmaple1.yaml`
+For a complete list of input and output parameters, see `example1.yaml`
+
 ---
 
 ## Configurable Likelihood Options
