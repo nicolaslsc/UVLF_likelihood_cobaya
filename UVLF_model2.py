@@ -151,7 +151,7 @@ class UVLF(Likelihood):
             self.UVLF_HST[:, 5] *= np.array(LF_corr)
 
         # ---- Parse constants ----
-        self.parse_assign(BASE / "UVLF_ST_model2.data", 'UVLF_HST_ST_model2')
+        self.parse_assign(BASE / "UVLF_HST_model2.data", 'UVLF_HST_ST_model2')
         
         # JWST reference cosmology (Donnan+ 2024)
         self.Omega_m_JWST = 0.3
@@ -496,11 +496,7 @@ class UVLF(Likelihood):
             if rows.size == 0:
                 continue
 
-            HMFs = self.HMF_all(z, Pk_interp, 
-                                self.Anorm, 
-                                self.qnorm, 
-                                self.cnorm
-                               )
+            HMFs = self.HMF_all(z, Pk_interp )
 
             Hz = self.provider.get_Hubble(z, units='1/Mpc')
             
